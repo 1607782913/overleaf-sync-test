@@ -42,7 +42,70 @@ In this work, we focus on preventive sample cleansing before retraining a clean 
 
 \section{Related Work}\label{sec:relatedwork}
 \subsection{Backdoor Attacks on Contrastive Learning}
-Write the related work here.
+Contrastive learning (CL) learns an encoder by enforcing consistency between
+different augmented views of the same instance while separating the
+representations of distinct instances. Representative frameworks instantiate
+this principle in different ways. SimCLR constructs positive pairs through
+stochastic data augmentation and contrasts them against other samples in a
+large minibatch \cite{chen2020simclr}, whereas MoCo maintains a momentum-updated
+key encoder and a queue of negative representations to provide a large and
+consistent dictionary \cite{he2020moco}. After pre-training, the learned encoder
+is transferred to downstream tasks through linear evaluation, fine-tuning, or
+nearest-neighbor prediction. This decoupling of unlabeled pre-training from
+downstream supervision enables broad reuse, but it also enlarges the attack
+surface: a malicious association acquired during pre-training can persist in
+the representation space and be inherited by multiple downstream models.
+
+Backdoor attacks exploit this transferability by forcing inputs containing an
+attacker-chosen trigger to produce representations associated with a target
+semantic concept, while preserving normal utility on trigger-free inputs. In a
+data-poisoning threat model, the adversary can inject only a small subset of
+crafted samples into an otherwise benign, unlabeled corpus but does not control
+the victim's training procedure. The trigger may be a visible patch or a more
+subtle pattern, and the poisoned samples are constructed so that contrastive
+optimization repeatedly couples the trigger with the attacker's target. At
+inference time, the compromised encoder maps a triggered input toward the
+target region, causing a downstream classifier to predict the target class.
+Because pre-training corpora are often collected from open and weakly curated
+sources, this limited data-access assumption is practically relevant.
+
+Early work demonstrated that multimodal contrastive models can be manipulated
+with a very small poisoned fraction. Carlini and Terzis showed that poisoning
+image--text pairs can implant both targeted poisoning effects and patch-based
+backdoors in contrastively trained models \cite{carlini2022poisoning}. In the
+encoder-supply-chain setting, BadEncoder assumes control of a released
+pre-trained encoder rather than its original corpus. It directly optimizes the
+encoder so that triggered inputs align with reference inputs from selected
+target classes, while clean representations remain close to those produced by
+the original encoder \cite{jia2022badencoder}. Consequently, downstream
+classifiers constructed from the compromised encoder can inherit the malicious
+behavior even when their own training data and procedures are benign. These two
+lines of work expose complementary risks: untrusted pre-training data can
+corrupt an otherwise legitimate training pipeline, whereas an untrusted model
+provider can distribute already-compromised representations.
+
+Subsequent work has examined why straightforward poisoning is not always
+reliable under contrastive objectives. Random crops, color transformations, and
+other augmentations can remove or distort a trigger, while the absence of class
+labels makes it difficult to bind poisoned instances consistently to a target
+semantic cluster. CorruptEncoder addresses these limitations by designing
+poisoned inputs and an attack objective that strengthen the association between
+the trigger and target representations during CL pre-training
+\cite{zhang2024corruptencoder}. Collectively, these attacks show that high clean
+accuracy is not evidence of a trustworthy encoder: the malicious behavior is
+conditional and may remain dormant during standard validation.
+
+Nevertheless, existing attacks commonly depend on particular trigger families,
+target reference data, augmentation robustness, or assumptions about access to
+the corpus or encoder. Their effectiveness may therefore vary across CL
+algorithms, poisoning budgets, and downstream tasks. More importantly, the
+representation-level mechanism makes sample attribution difficult: poisoned
+and benign inputs may overlap under ordinary embeddings even when they induce
+different training dynamics. This limitation motivates preventive defenses
+that inspect the unlabeled corpus before retraining. Rather than assuming that
+a backdoor can be recognized from a fixed feature snapshot, backdoor sample
+detection and cleansing should expose trigger-dependent behavior while
+preserving the diversity and utility of benign pre-training data.
 
 \subsection{Backdoor Defenses for Contrastive Learning}
 Write the related work here.
