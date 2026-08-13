@@ -1,0 +1,76 @@
+% =============================================================
+% TDSC published-look starter (visual style close to IEEE Xplore)
+% NOTE: IEEE may apply its own production typesetting after acceptance.
+% For final submission, also compare with the current IEEE Template Selector.
+% =============================================================
+\documentclass[10pt,journal]{IEEEtran}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{cite}
+\usepackage[caption=false,font=footnotesize]{subfig}
+\usepackage{url}
+
+\begin{document}
+
+\title{Active Diagnostic Probing for Backdoor Sample Cleansing in Contrastive Learning}
+
+\author{First~Author,~\IEEEmembership{Graduate Student Member,~IEEE,}
+        Second~Author,~\IEEEmembership{Member,~IEEE,}
+        and~Third~Author,~\IEEEmembership{Senior Member,~IEEE}%
+\thanks{First Author and Second Author are with the School of XXX, XXX University, City, Country. E-mail: xxx@xxx.edu.}%
+\thanks{Third Author is with the Department of XXX, XXX University, City, Country.}%
+\thanks{Manuscript received Month xx, 2026; revised Month xx, 2026.}}
+
+
+\maketitle
+
+\begin{abstract}
+Contrastive learning has emerged as an effective paradigm for learning transferable representations from large-scale unlabeled data. However, its reliance on uncurated pre-training data exposes it to data-poisoning backdoor attacks. In this work, we study backdoored sample cleansing for unlabeled contrastive-learning datasets and develop an active diagnostic probing framework. The key idea is to transform difficult-to-separate static representations into probe-induced response representations, calibrate benign responses using a small cross-domain reference set, preserve local response topology with UMAP, and identify suspicious samples with reference-anchored DBSCAN. Extensive experiments will evaluate cleansing effectiveness, post-cleansing security and utility, and computational overhead.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Contrastive learning, self-supervised learning, backdoor attacks, poisoned sample detection, data cleansing.
+\end{IEEEkeywords}
+
+\section{Introduction}\label{sec:introduction}
+\IEEEPARstart{C}{ontrastive} learning (CL) has become a fundamental paradigm for self-supervised representation learning, enabling neural networks to learn transferable visual representations from large-scale unlabeled datasets. By encouraging different augmented views of the same instance to produce similar representations while maintaining discriminability among different instances, contrastive learning has achieved strong performance across a wide range of downstream tasks. However, the reliance on large-scale and potentially uncurated data sources introduces an important security risk: an adversary may inject a small number of poisoned samples into the unlabeled pre-training dataset and implant a hidden backdoor into the learned encoder.
+
+In this work, we focus on preventive sample cleansing before retraining a clean contrastive encoder. Our central idea is to move from passive feature inspection to active diagnostic probing. A carefully designed probe is applied to suspicious samples, and the resulting representation changes are characterized as response features. These response features are then calibrated with a small trusted benign reference set and analyzed through local topology and density.
+
+\section{Related Work}\label{sec:relatedwork}
+\subsection{Backdoor Attacks on Contrastive Learning}
+Write the related work here.
+
+\subsection{Backdoor Defenses for Contrastive Learning}
+Write the related work here.
+
+\subsection{Representation-Based Anomaly Detection}
+Write the related work here.
+
+\section{Threat Model}\label{sec:threatmodel}
+\subsection{Attacker Capabilities}
+Describe the poisoning ratio, trigger, attack target, and attacker knowledge.
+
+\subsection{Defender Capabilities}
+Describe access to the encoder, unlabeled dataset, and small trusted reference set.
+
+\subsection{Assumptions and Defense Objective}
+Describe the trusted-reference and randomized-probe assumptions, together with the cleansing objective.
+
+\section{Motivation and Key Observations}\label{sec:motivation}
+% TODO
+\section{Methodology}\label{sec:method}
+% TODO
+\section{Experimental Evaluation}\label{sec:experiment}
+% TODO
+\section{Discussion and Limitations}\label{sec:discussion}
+% TODO
+\section{Conclusion}\label{sec:conclusion}
+% TODO
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+\end{document}
