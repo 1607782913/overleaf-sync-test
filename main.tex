@@ -137,16 +137,16 @@ representation region as benign samples from the attack target
 class. In contrast, benign samples from other semantic classes are
 distributed over different regions of the representation space.
 
-\begin{figure*}[!t]
+\begin{figure}[!t]
     \centering
-    \includegraphics[width=0.86\textwidth]{figures/fig_original_analysis.png}
+    \includegraphics[width=0.98\columnwidth]{figures/fig_original_analysis.png}
     \caption{Original-representation analysis under SSL-Backdoor on
     ImageNet-100 with a SimCLR encoder. (a) UMAP visualization of
     other-class benign, target-class benign, and poisoned samples.
     (b) Distributions of cosine similarity to the target-class
     centroid for the same three groups.}
     \label{fig:original_analysis}
-\end{figure*}
+\end{figure}
 
 This observation indicates that the difficulty does not simply
 arise from the choice of a particular clustering algorithm.
