@@ -139,7 +139,7 @@ distributed over different regions of the representation space.
 
 \begin{figure*}[!t]
     \centering
-    \includegraphics[width=\textwidth]{figures/fig_original_analysis.png}
+    \includegraphics[width=0.86\textwidth]{figures/fig_original_analysis.png}
     \caption{Original-representation analysis under SSL-Backdoor on
     ImageNet-100 with a SimCLR encoder. (a) UMAP visualization of
     other-class benign, target-class benign, and poisoned samples.
@@ -303,13 +303,15 @@ clustering or directly determine the retained training cluster.
 Based on these observations, our defense follows the pipeline
 
 \begin{equation}
-    \text{Diagnostic Probing}
-    \rightarrow
-    \text{Probe-Transformed Representations}
-    \rightarrow
-    \text{Shared UMAP Manifold}
-    \rightarrow
-    \text{DBSCAN-Based Cleansing}.
+    \begin{gathered}
+        \text{Diagnostic Probing}
+        \rightarrow
+        \text{Probe-Transformed Representations} \\
+        \rightarrow
+        \text{Shared UMAP Manifold}
+        \rightarrow
+        \text{DBSCAN-Based Cleansing}.
+    \end{gathered}
 \end{equation}
 
 The complete framework and implementation details are presented in
