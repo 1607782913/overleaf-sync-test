@@ -104,29 +104,120 @@ Let $\delta(x_i)\in\{0,1\}$ be the cleansing decision for $x_i\in\mathcal{D}$, w
     \label{eq:cleansingsets}
 \end{equation}
 The detection objective is to maximize recovery of $\mathcal{D}_{p}$ while minimizing the removal of clean samples. The end-to-end defense objective is to train a final encoder on $\widehat{\mathcal{D}}_{b}$ that achieves a low attack success rate on trigger-embedded inputs while preserving clean accuracy. We therefore evaluate both sample-level detection metrics---including precision, recall, and false-positive rate---and post-cleansing model metrics, including attack success rate and clean accuracy. A clustering metric alone is insufficient to establish defense effectiveness.
+\section{Motivation and Key Observations}
+\label{sec:motivation}
 
-\section{Motivation and Key Observations}\label{sec:motivation}
-\subsection{Limitations of Passive Feature Inspection}
-Representative feature-based defenses rely on poison-induced structure being detectable in the learned representation space: activation clustering seeks a separate cluster of poisoned activations, whereas spectral methods identify samples with large outlier scores along dominant covariance directions~\cite{Chen2018ActivationClustering,Tran2018Spectral}. This premise is unreliable for CL backdoors. A poisoned image retains its original visual content, while the trigger is learned as an additional predictive feature through augmentation-based training. Clean and poisoned samples can therefore share local neighborhoods, loss values, and dominant feature directions even when the encoder achieves a high attack success rate~\cite{Li2024Difficulty}. Dataset diversity further complicates global outlier detection because a rare clean class may be farther from the feature majority than a poisoned sample from a common class. The absence of a distinct poison cluster in the original feature space is therefore not sufficient evidence that the pre-training dataset is clean.
+This section investigates why poisoned samples are difficult to
+identify from their original representations and how diagnostic
+probing can expose their hidden backdoor behavior. We first analyze
+the representation overlap caused by contrastive backdoor learning,
+then show that a semantic probe can amplify the difference between
+benign and poisoned samples. These observations motivate the
+detection framework introduced in Section~\ref{sec:methodology}.
 
-This limitation motivates active feature probing. Rather than detecting poisons from the original features alone, the defender applies the same semantic probe to every sample and examines the resulting feature distribution. A common probe can amplify differences associated with an implanted backdoor while reducing reliance on the visual form of the attacker's trigger. The current detector operates directly on probe-transformed features; it does not yet compute an explicit feature displacement between the original and transformed samples.
 
-\subsection{Observation I: Semantic Probing Can Amplify Feature Differences}
-The fixed semantic probe is designed to shift transformed features toward a defender-selected target class. For a clean sample, this transformation introduces the probe-associated feature signal. For a poisoned sample, the transformed feature may also be influenced by the trigger--target association already implanted by the attacker. When the attack and probe target classes differ, these two associations may produce a different feature shift for poisoned samples than for clean samples. This competition provides a hypothesis for the observed feature separation, but has not yet been established as its causal mechanism.
+\subsection{Limitations of Original-Feature Detection}
+\label{sec:original_feature}
 
-This probing strategy is not tied to a particular trigger pattern. Patch, frequency-domain, and optimized attacks use different poison-generation mechanisms, but a successful attack must implant a persistent trigger--target association in the encoder. The semantic probe is intended to expose this learned association rather than reconstruct the attacker's trigger. We therefore apply the same probe generator to every training sample and reuse it across datasets and encoders. If $y_t=y_r$, however, the attack and probe may reinforce the same target association instead of competing. We include this same-target setting as an adaptive evaluation rather than excluding it through a secrecy assumption.
+A straightforward cleansing strategy is to detect poisoned samples
+directly from the feature space of a suspicious encoder. Such
+approaches generally assume that poisoned samples form abnormal
+clusters or feature outliers. However, this assumption is weak for
+contrastive-learning backdoors.
 
-\subsection{Observation II: Reference Samples Guide Manifold Construction}
-A cross-dataset reference set is not necessarily representative of the clean distribution in the pre-training dataset. Differences in source distribution or class composition can dominate the backdoor-related signal and cause a detector to separate datasets rather than clean and poisoned samples~\cite{Pan2023ASSET,Chen2025AUTO}. We therefore use the reference labels only to select the probe target class and never to define a supervised decision boundary. The probe-transformed reference samples participate in the same unsupervised CL objective as $\mathcal{D}$. After encoder training, the probe-transformed training and reference features are jointly used to fit UMAP.
+As shown in Fig.~\ref{fig:original_overlap}, poisoned samples do not
+necessarily form an isolated cluster in the original representation
+space. Instead, they substantially overlap with benign samples,
+especially those associated with the attack target semantics.
+Consequently, clustering or outlier detection directly on the
+original features provides limited separability.
 
-The reference set contains 1,300 images from the probe target class but need not match the attacker's target class or the class distribution of $\mathcal{D}$. It can influence both the learned encoder and the neighborhood graph constructed by UMAP, but it does not select the clean cluster through a centroid-distance rule. A factorial ablation that compares using the reference set during encoder training, UMAP fitting, both stages, or neither stage is therefore required to isolate its contribution to poisoned-sample separability.
+% Fig. 4:
+% Original feature UMAP
+% Poisoned / target-class benign / other benign
 
-\subsection{Observation III: Density Clustering Does Not Require a Known Poison Ratio}
-Probe-transformed features may not be linearly separable in the original high-dimensional space. We therefore use UMAP to preserve local neighborhoods before density-based clustering. The training and reference features are jointly embedded into two dimensions using cosine distance, 15 neighbors, a minimum distance of 0.1, and a fixed random seed~\cite{McInnes2018UMAP}. The training coordinates are then standardized, and DBSCAN is applied with Euclidean distance, $\epsilon=1.0$, and 15 minimum samples~\cite{Ester1996DBSCAN}.
 
-The largest non-noise DBSCAN cluster is treated as the clean set, whereas samples assigned to other clusters or noise are flagged as suspicious. This rule avoids requiring the poison ratio in advance, but it introduces a stronger structural assumption: clean samples must dominate one density-connected component. Multiple clean semantic clusters may therefore cause false positives, whereas poisoned samples embedded inside the largest cluster will be missed. If DBSCAN returns no non-noise cluster, the current implementation reports detection failure and produces no cleaned dataset.
+\subsection{Why Poisoned Samples Overlap with Target Semantics}
+\label{sec:target_overlap}
 
-Preliminary BYOL experiments show strong detection performance against SSL-Backdoor and CTRL in the evaluated CIFAR settings, but the detector fails to recover CorruptEncoder poisons on CIFAR-10 and CIFAR-100. Feature extraction is also incomplete for two ImageNet-100 attack settings. The current evidence therefore supports the feasibility of probe-based feature separation for selected attacks, not a trigger-agnostic defense. Required evaluations include a no-reference control, original-versus-probed feature ablations, multiple UMAP and training seeds, reference-budget sensitivity, same-target attacks, completed ImageNet-100 experiments, and end-to-end retraining on the cleaned dataset.
+This phenomenon originates from the learning mechanism of
+contrastive backdoors. Contrastive learning encourages augmented
+views to learn consistent representations, while a successful
+backdoor additionally establishes an association between the
+attacker's trigger and a target semantic concept. Consequently,
+trigger-related representations are encouraged to approach the
+target semantic region during poisoned pre-training.
+
+Let $\mathbf{z}_p$ denote the representation of a poisoned sample
+and $\boldsymbol{\mu}_t$ denote the representation centroid of the
+attack target class. A successful attack tends to increase
+
+\begin{equation}
+    \operatorname{sim}
+    (\mathbf{z}_p,\boldsymbol{\mu}_t),
+\end{equation}
+
+making poisoned samples increasingly similar to benign target-class
+samples. Figure~\ref{fig:target_alignment} provides both a
+representation-space visualization and quantitative similarity
+analysis. This target-semantic alignment explains why poisoned
+samples may be difficult to identify as conventional feature
+outliers.
+
+% Fig. 5:
+% (a) mechanism illustration
+% (b) cosine similarity to target centroid
+
+
+\subsection{Diagnostic Probing Amplifies Poison--Clean Differences}
+\label{sec:probe_observation}
+
+The above observation motivates us to replace passive feature
+inspection with active diagnostic probing. We apply the same
+semantic probe $G(\cdot)$ to every sample and compare the resulting
+representations. For an input $x_i$, let
+
+\begin{equation}
+    \mathbf{z}_i=f_{\theta}(x_i), \qquad
+    \mathbf{z}_i^{p}=f_{\theta}(G(x_i)).
+\end{equation}
+
+Although benign and poisoned samples may overlap before probing,
+we observe that they respond differently to the same semantic
+intervention. Poisoned samples already contain an attacker-induced
+trigger--target association, which can modulate their response to
+the newly introduced probe. As a result, probing increases the
+difference between the two populations.
+
+Figure~\ref{fig:probe_response} illustrates this effect from three
+perspectives: feature-space separability, representation change,
+and local-neighborhood variation. In particular, the probe causes
+different changes in representation magnitude and neighborhood
+structure for benign and poisoned samples, making the originally
+entangled populations more distinguishable.
+
+% Fig. 6:
+% (a) original UMAP
+% (b) probed UMAP
+% (c) representation change distribution
+% (d) neighborhood retention distribution
+
+
+\subsection{Design Implications}
+\label{sec:design_implications}
+
+The above observations provide two implications for our defense.
+First, poisoned-sample detection should operate on probe-transformed
+representations rather than relying solely on the original feature
+space. Second, the discriminative information introduced by probing
+is strongly reflected in local neighborhood structure.
+
+Accordingly, our framework jointly analyzes the probe-transformed
+training and trusted reference samples using UMAP to preserve local
+neighborhood relationships. DBSCAN is then used to identify
+density-separated suspicious samples without requiring the poison
+ratio in advance. The detailed framework is presented in
+Section~\ref{sec:methodology}.
 \section{Methodology}\label{sec:method}
 % TODO
 \section{Experimental Evaluation}\label{sec:experiment}
