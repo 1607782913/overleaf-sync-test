@@ -203,76 +203,73 @@ intervene on the input and examine how its representation responds?
 \subsection{Diagnostic Probing Reveals Poison--Clean Differences}
 \label{sec:probe_observation}
 
-Motivated by the above analysis, we move from passive representation
-inspection to active diagnostic probing. Specifically, the same
-pretrained semantic probe $G(\cdot)$ is applied to every sample.
-For an input $x_i$, we denote its original and probe-transformed
-representations as
+The above observation motivates us to move from passive feature
+inspection to active diagnostic probing. Specifically, we apply the
+same pretrained semantic probe $G(\cdot)$ to each sample and examine
+how its representation responds. For an input $x_i$, we denote
 
 \begin{equation}
-    \mathbf{z}_i
-    =
-    f_{\theta}(x_i),
-    \qquad
-    \mathbf{z}_i^{p}
-    =
-    f_{\theta}\!\left(G(x_i)\right),
+    \mathbf{z}_i=f_{\theta}(x_i), \qquad
+    \mathbf{z}_i^{p}=f_{\theta}(G(x_i)),
     \label{eq:probe_representation}
 \end{equation}
 
-where both representations are $\ell_2$ normalized before subsequent
-analysis.
+where both representations are $\ell_2$ normalized.
 
-The key observation is that samples that appear similar in the
-original representation space need not respond identically to the
-same semantic intervention. A poisoned sample has already been
-optimized under an attacker-induced trigger--target association,
-whereas a benign sample has not. The diagnostic probe therefore
-interacts with different learned representation structures in the
-two populations, resulting in different probe-induced responses.
-
-This phenomenon can be examined by comparing the original and
-probe-transformed representations. Although poisoned and target-class
-benign samples are entangled before probing, their probe-transformed
-representations exhibit more distinguishable local structures. The
-discrepancy can also be observed through changes in representation
-and neighborhood organization. For example, the representation
-response of a sample can be characterized by
+Interestingly, the same probe induces markedly different responses
+for benign target-class and poisoned samples. As shown in
+Fig.~\ref{fig:probe_response}, benign target-class samples undergo
+substantially larger representation changes, whereas poisoned
+samples exhibit a more constrained response. We characterize the
+representation change as
 
 \begin{equation}
     r_{\mathrm{rep}}(x_i)
     =
-    1 -
-    \operatorname{cos}
-    \left(
-        \mathbf{z}_i,
-        \mathbf{z}_i^{p}
-    \right),
+    1-\operatorname{cos}
+    (\mathbf{z}_i,\mathbf{z}_i^{p}),
     \label{eq:response_magnitude}
 \end{equation}
 
-while the preservation of its local neighborhood can be measured as
+\begin{figure*}[!t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig5_diagnostic_probe_final.pdf}
+    \caption{Diagnostic-probe analysis of benign target-class and
+    poisoned samples. The figure compares their probe-induced
+    representation responses and local-neighborhood changes, which
+    are used to motivate probe-assisted detection.}
+    \label{fig:probe_response}
+\end{figure*}
+
+In addition to the difference in individual feature responses,
+probing also affects the local neighborhood structures differently.
+We measure neighborhood retention by
 
 \begin{equation}
     r_{\mathrm{nbr}}(x_i)
     =
     \frac{
-        \left|
-        \mathcal{N}_k(\mathbf{z}_i)
-        \cap
-        \mathcal{N}_k(\mathbf{z}_i^{p})
-        \right|
+    |\mathcal{N}_k(\mathbf{z}_i)
+    \cap
+    \mathcal{N}_k(\mathbf{z}_i^{p})|
     }{k},
     \label{eq:neighbor_retention}
 \end{equation}
 
-where $\mathcal{N}_k(\cdot)$ denotes the set of $k$ nearest
-neighbors in the representation space.
+Poisoned samples retain a larger fraction of their original
+neighbors, while benign target-class samples undergo substantially
+stronger neighborhood reorganization. This observation is
+consistent with the hypothesis that the attacker-induced
+trigger--target association constrains the response of poisoned
+representations to the diagnostic semantic intervention.
 
-These measurements are used here to characterize the phenomenon
-rather than as explicit detection scores. The important observation
-is that diagnostic probing exposes structural differences that are
-much less evident from the original static representations alone.
+More importantly, these different responses reshape the local
+geometry of the representation space. Compared with the original
+representations in Fig.~\ref{fig:original_analysis}(a),
+the probe-transformed representations in
+Fig.~\ref{fig:probe_response} exhibit more distinctive poisoned
+structures. Therefore, diagnostic probing exposes information that
+is difficult to obtain from static representations alone.
 
 
 \subsection{Design Implications}
