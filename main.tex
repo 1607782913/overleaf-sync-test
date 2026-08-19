@@ -107,117 +107,216 @@ The detection objective is to maximize recovery of $\mathcal{D}_{p}$ while minim
 \section{Motivation and Key Observations}
 \label{sec:motivation}
 
-This section investigates why poisoned samples are difficult to
-identify from their original representations and how diagnostic
-probing can expose their hidden backdoor behavior. We first analyze
-the representation overlap caused by contrastive backdoor learning,
-then show that a semantic probe can amplify the difference between
-benign and poisoned samples. These observations motivate the
-detection framework introduced in Section~\ref{sec:methodology}.
+This section motivates our defense through a representative
+contrastive backdoor setting. We first examine why poisoned samples
+can be difficult to distinguish from genuine target-class samples
+using their original representations. We then analyze the underlying
+target-semantic association induced by backdoor training and show
+that applying a common semantic probe reveals additional behavioral
+differences between benign and poisoned samples. These observations
+motivate the probe-assisted manifold analysis introduced in
+Section~\ref{sec:method}.
 
 
-\subsection{Limitations of Original-Feature Detection}
+\subsection{Limitations of Passive Detection on Original Features}
 \label{sec:original_feature}
 
-A straightforward cleansing strategy is to detect poisoned samples
-directly from the feature space of a suspicious encoder. Such
-approaches generally assume that poisoned samples form abnormal
-clusters or feature outliers. However, this assumption is weak for
-contrastive-learning backdoors.
+A straightforward strategy for poisoned-sample cleansing is to
+directly identify suspicious samples from the representation space
+of a potentially backdoored encoder. Such a strategy implicitly
+assumes that poisoned samples exhibit sufficiently distinctive
+geometric patterns, such as isolated clusters or conventional
+feature outliers. However, this assumption may not hold in
+contrastive backdoor learning.
 
-As shown in Fig.~\ref{fig:original_overlap}, poisoned samples do not
-necessarily form an isolated cluster in the original representation
-space. Instead, they substantially overlap with benign samples,
-especially those associated with the attack target semantics.
-Consequently, clustering or outlier detection directly on the
-original features provides limited separability.
+We illustrate this issue using SSL-Backdoor on ImageNet-100 with a
+SimCLR encoder. As shown in Fig.~\ref{fig:original_analysis}(a),
+poisoned samples do not form a cleanly isolated anomaly cluster.
+Instead, a substantial portion of them is embedded in the same local
+representation region as benign samples from the attack target
+class. In contrast, benign samples from other semantic classes are
+distributed over different regions of the representation space.
 
-% Fig. 4:
-% Original feature UMAP
-% Poisoned / target-class benign / other benign
+\begin{figure*}[!t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig_original_analysis.png}
+    \caption{Original-representation analysis under SSL-Backdoor on
+    ImageNet-100 with a SimCLR encoder. (a) UMAP visualization of
+    other-class benign, target-class benign, and poisoned samples.
+    (b) Distributions of cosine similarity to the target-class
+    centroid for the same three groups.}
+    \label{fig:original_analysis}
+\end{figure*}
+
+This observation indicates that the difficulty does not simply
+arise from the choice of a particular clustering algorithm.
+Rather, the original representation itself provides limited
+information for distinguishing poisoned samples from genuine
+target-class samples. Consequently, passive detection based solely
+on static feature geometry can be unreliable in such a setting.
 
 
-\subsection{Why Poisoned Samples Overlap with Target Semantics}
+\subsection{Why Poisoned Samples Align with Target Semantics}
 \label{sec:target_overlap}
 
-This phenomenon originates from the learning mechanism of
-contrastive backdoors. Contrastive learning encourages augmented
-views to learn consistent representations, while a successful
-backdoor additionally establishes an association between the
-attacker's trigger and a target semantic concept. Consequently,
-trigger-related representations are encouraged to approach the
-target semantic region during poisoned pre-training.
+The above phenomenon is closely related to the learning objective
+of contrastive backdoors. Contrastive learning encourages different
+augmented views of an instance to share consistent representations,
+while backdoor poisoning additionally establishes an association
+between an attacker-specified trigger and a target semantic concept.
+As this association is repeatedly reinforced during poisoned
+pre-training, trigger-related representations are encouraged to
+align with the target semantic region.
 
-Let $\mathbf{z}_p$ denote the representation of a poisoned sample
-and $\boldsymbol{\mu}_t$ denote the representation centroid of the
-attack target class. A successful attack tends to increase
+Let $\mathbf{z}_p$ denote the normalized representation of a
+poisoned sample and let $\boldsymbol{\mu}_t$ denote the centroid of
+benign representations from the attack target class. The
+target-semantic association can be characterized by
 
 \begin{equation}
-    \operatorname{sim}
-    (\mathbf{z}_p,\boldsymbol{\mu}_t),
+    s_t(\mathbf{z}_p)
+    =
+    \operatorname{cos}
+    \left(
+        \mathbf{z}_p,
+        \boldsymbol{\mu}_t
+    \right).
+    \label{eq:target_similarity}
 \end{equation}
 
-making poisoned samples increasingly similar to benign target-class
-samples. Figure~\ref{fig:target_alignment} provides both a
-representation-space visualization and quantitative similarity
-analysis. This target-semantic alignment explains why poisoned
-samples may be difficult to identify as conventional feature
-outliers.
+As shown in Fig.~\ref{fig:original_analysis}(b), poisoned samples
+exhibit substantially higher similarity to the target-class centroid
+than benign samples from other classes. More importantly, their
+similarity distribution is close to that of genuine target-class
+benign samples. This result quantitatively supports the observation
+in Fig.~\ref{fig:original_analysis}(a): the original representation
+space captures the attack-induced target semantics, but provides
+limited information for determining whether a target-aligned
+representation originates from a genuine target-class sample or a
+poisoned sample.
 
-% Fig. 5:
-% (a) mechanism illustration
-% (b) cosine similarity to target centroid
+This motivates a different question: rather than asking whether a
+sample is anomalous in the original feature space, can we actively
+intervene on the input and examine how its representation responds?
 
 
-\subsection{Diagnostic Probing Amplifies Poison--Clean Differences}
+\subsection{Diagnostic Probing Reveals Poison--Clean Differences}
 \label{sec:probe_observation}
 
-The above observation motivates us to replace passive feature
-inspection with active diagnostic probing. We apply the same
-semantic probe $G(\cdot)$ to every sample and compare the resulting
-representations. For an input $x_i$, let
+Motivated by the above analysis, we move from passive representation
+inspection to active diagnostic probing. Specifically, the same
+pretrained semantic probe $G(\cdot)$ is applied to every sample.
+For an input $x_i$, we denote its original and probe-transformed
+representations as
 
 \begin{equation}
-    \mathbf{z}_i=f_{\theta}(x_i), \qquad
-    \mathbf{z}_i^{p}=f_{\theta}(G(x_i)).
+    \mathbf{z}_i
+    =
+    f_{\theta}(x_i),
+    \qquad
+    \mathbf{z}_i^{p}
+    =
+    f_{\theta}\!\left(G(x_i)\right),
+    \label{eq:probe_representation}
 \end{equation}
 
-Although benign and poisoned samples may overlap before probing,
-we observe that they respond differently to the same semantic
-intervention. Poisoned samples already contain an attacker-induced
-trigger--target association, which can modulate their response to
-the newly introduced probe. As a result, probing increases the
-difference between the two populations.
+where both representations are $\ell_2$ normalized before subsequent
+analysis.
 
-Figure~\ref{fig:probe_response} illustrates this effect from three
-perspectives: feature-space separability, representation change,
-and local-neighborhood variation. In particular, the probe causes
-different changes in representation magnitude and neighborhood
-structure for benign and poisoned samples, making the originally
-entangled populations more distinguishable.
+The key observation is that samples that appear similar in the
+original representation space need not respond identically to the
+same semantic intervention. A poisoned sample has already been
+optimized under an attacker-induced trigger--target association,
+whereas a benign sample has not. The diagnostic probe therefore
+interacts with different learned representation structures in the
+two populations, resulting in different probe-induced responses.
 
-% Fig. 6:
-% (a) original UMAP
-% (b) probed UMAP
-% (c) representation change distribution
-% (d) neighborhood retention distribution
+This phenomenon can be examined by comparing the original and
+probe-transformed representations. Although poisoned and target-class
+benign samples are entangled before probing, their probe-transformed
+representations exhibit more distinguishable local structures. The
+discrepancy can also be observed through changes in representation
+and neighborhood organization. For example, the representation
+response of a sample can be characterized by
+
+\begin{equation}
+    r_{\mathrm{rep}}(x_i)
+    =
+    1 -
+    \operatorname{cos}
+    \left(
+        \mathbf{z}_i,
+        \mathbf{z}_i^{p}
+    \right),
+    \label{eq:response_magnitude}
+\end{equation}
+
+while the preservation of its local neighborhood can be measured as
+
+\begin{equation}
+    r_{\mathrm{nbr}}(x_i)
+    =
+    \frac{
+        \left|
+        \mathcal{N}_k(\mathbf{z}_i)
+        \cap
+        \mathcal{N}_k(\mathbf{z}_i^{p})
+        \right|
+    }{k},
+    \label{eq:neighbor_retention}
+\end{equation}
+
+where $\mathcal{N}_k(\cdot)$ denotes the set of $k$ nearest
+neighbors in the representation space.
+
+These measurements are used here to characterize the phenomenon
+rather than as explicit detection scores. The important observation
+is that diagnostic probing exposes structural differences that are
+much less evident from the original static representations alone.
 
 
 \subsection{Design Implications}
 \label{sec:design_implications}
 
-The above observations provide two implications for our defense.
-First, poisoned-sample detection should operate on probe-transformed
-representations rather than relying solely on the original feature
-space. Second, the discriminative information introduced by probing
-is strongly reflected in local neighborhood structure.
+The above observations lead to three design implications.
 
-Accordingly, our framework jointly analyzes the probe-transformed
-training and trusted reference samples using UMAP to preserve local
-neighborhood relationships. DBSCAN is then used to identify
-density-separated suspicious samples without requiring the poison
-ratio in advance. The detailed framework is presented in
-Section~\ref{sec:methodology}.
+First, relying exclusively on the original representation space can
+be insufficient because poisoned samples may be strongly entangled
+with genuine target-class samples. We therefore analyze
+probe-transformed representations rather than performing detection
+directly on the original features.
+
+Second, the probe-induced discrepancy is reflected not only in the
+response of individual samples but also in their local neighborhood
+organization. This motivates the use of a manifold-learning method
+that emphasizes local geometric relationships. We therefore employ
+UMAP to construct a low-dimensional representation of the
+probe-transformed feature space.
+
+Third, a small trusted reference set can provide additional benign
+structure for manifold construction without directly determining
+which training samples are poisoned. Accordingly, the
+probe-transformed training samples and trusted reference samples are
+jointly used to construct the shared UMAP manifold. DBSCAN is then
+applied only to the embedded training samples to identify
+density-separated suspicious structures. The reference samples
+therefore guide manifold construction but do not participate in
+clustering or directly determine the retained training cluster.
+
+Based on these observations, our defense follows the pipeline
+
+\begin{equation}
+    \text{Diagnostic Probing}
+    \rightarrow
+    \text{Probe-Transformed Representations}
+    \rightarrow
+    \text{Shared UMAP Manifold}
+    \rightarrow
+    \text{DBSCAN-Based Cleansing}.
+\end{equation}
+
+The complete framework and implementation details are presented in
+Section~\ref{sec:method}.
 \section{Methodology}\label{sec:method}
 % TODO
 \section{Experimental Evaluation}\label{sec:experiment}
