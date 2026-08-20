@@ -126,11 +126,13 @@ directly identify suspicious samples from the representation space
 of a potentially backdoored encoder. Such a strategy implicitly
 assumes that poisoned samples exhibit sufficiently distinctive
 geometric patterns, such as isolated clusters or conventional
-feature outliers. However, this assumption may not hold in
-contrastive backdoor learning.
+feature outliers~\cite{Chen2018ActivationClustering,Tran2018Spectral,Hayase2021SPECTRE}.
+However, this assumption may not hold in contrastive backdoor
+learning~\cite{Li2024Difficulty}.
 
 We illustrate this issue using SSL-Backdoor on ImageNet-100 with a
-SimCLR encoder. As shown in Fig.~\ref{fig:original_analysis}(a),
+SimCLR encoder~\cite{Saha2022SSLBackdoor,Chen2020SimCLR}. As shown in
+Fig.~\ref{fig:original_analysis}(a),
 poisoned samples do not form a cleanly isolated anomaly cluster.
 Instead, a substantial portion of them is embedded in the same local
 representation region as benign samples from the attack target
@@ -166,7 +168,8 @@ while backdoor poisoning additionally establishes an association
 between an attacker-specified trigger and a target semantic concept.
 As this association is repeatedly reinforced during poisoned
 pre-training, trigger-related representations are encouraged to
-align with the target semantic region.
+align with the target semantic
+region~\cite{Saha2022SSLBackdoor,Li2023CTRL,Zhang2024CorruptEncoder,Sun2024BLTO}.
 
 Let $\mathbf{z}_p$ denote the normalized representation of a
 poisoned sample and let $\boldsymbol{\mu}_t$ denote the centroid of
@@ -288,7 +291,7 @@ response of individual samples but also in their local neighborhood
 organization. This motivates the use of a manifold-learning method
 that emphasizes local geometric relationships. We therefore employ
 UMAP to construct a low-dimensional representation of the
-probe-transformed feature space.
+probe-transformed feature space~\cite{McInnes2018UMAP}.
 
 Third, a small trusted reference set can provide additional benign
 structure for manifold construction without directly determining
@@ -296,7 +299,8 @@ which training samples are poisoned. Accordingly, the
 probe-transformed training samples and trusted reference samples are
 jointly used to construct the shared UMAP manifold. DBSCAN is then
 applied only to the embedded training samples to identify
-density-separated suspicious structures. The reference samples
+density-separated suspicious structures~\cite{Ester1996DBSCAN}. The
+reference samples
 therefore guide manifold construction but do not participate in
 clustering or directly determine the retained training cluster.
 
