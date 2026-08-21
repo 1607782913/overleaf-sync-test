@@ -90,7 +90,7 @@ The attack has two objectives. First, a downstream classifier $g_{\phi}\circ f_{
 \subsection{Defender's Knowledge and Capabilities}
 The defender has full access to the unlabeled pre-training dataset $\mathcal{D}$ and can train an encoder, extract backbone features, and apply input transformations. The defender does not know the class labels, poison annotations, trigger pattern, target class, attack type, or poison ratio. The detector must therefore operate without pre-specifying the number of poisoned samples or semantic clusters.
 
-In addition, the defender holds a trusted reference set $\mathcal{R}$ containing 1,300 clean images from one manually selected class $y_r$. The reference images may come from a different dataset and need not match the class distribution or data-collection process of $\mathcal{D}_{b}$; they only need a compatible visual modality and input format. Their labels are used solely to select the probe target class and never enter a supervised loss, clustering decision, or poison supervision. Because the same number of reference images is used for datasets of different sizes, $|\mathcal{R}|$ is treated as a fixed resource budget rather than a constant fraction of $|\mathcal{D}|$.
+In addition, the defender holds a trusted reference set $\mathcal{R}$ containing clean images from one manually selected class $y_r$. We set $|\mathcal{R}|=\lceil0.01|\mathcal{D}|\rceil$, so that the reference budget scales with the pre-training dataset. The reference images may come from a different dataset and need not match the class distribution or data-collection process of $\mathcal{D}_{b}$; they only need a compatible visual modality and input format. Their labels are used solely to select the probe target class and never enter a supervised loss, clustering decision, or poison supervision.
 
 Let $G$ denote the fixed semantic probe generator associated with class $y_r$. The generator is pre-trained once and reused across datasets and encoder settings. Before encoder training, the defender applies $G$ to every reference image and trains the encoder on $\mathcal{D}\cup G(\mathcal{R})$ using the same unsupervised CL objective and augmentation pipeline; the reference labels do not enter the loss. After training, $G$ is applied to every sample in $\mathcal{D}$, with each perturbation clipped to an $\ell_{\infty}$ radius of $8/255$. The backbone features of $G(\mathcal{D})$ and $G(\mathcal{R})$ are $L_2$-normalized and jointly embedded with UMAP. DBSCAN is fitted only to the standardized coordinates of the training samples. Ground-truth poison indices are used only to evaluate detection performance and never affect the clustering decision.
 
@@ -321,7 +321,239 @@ Based on these observations, our defense follows the pipeline
 The complete framework and implementation details are presented in
 Section~\ref{sec:method}.
 \section{Methodology}\label{sec:method}
-% TODO
+\subsection{Framework Overview}
+\label{sec:method_overview}
+
+Our objective is to cleanse a potentially poisoned, unlabeled
+pre-training dataset before training the encoder that will be released
+for downstream use. The proposed framework consists of two training
+stages separated by sample-level detection. In the first stage, we
+train a diagnostic encoder on the untrusted dataset together with a
+small probe-transformed trusted reference set. We then apply the same
+fixed semantic probe to every training and reference sample, extract
+normalized backbone representations, and construct a shared UMAP
+manifold. DBSCAN is fitted only to the embedded training samples. The
+largest non-noise cluster is retained, while all remaining clusters
+and noise points are removed. In the second stage, a final encoder is
+trained from scratch using only the cleansed training dataset. The
+diagnostic encoder, reference set, and semantic probe are not used in
+this final training stage.
+
+Let $N=|\mathcal{D}|$ and let
+$\mathcal{R}=\{r_j\}_{j=1}^{m}$ denote the trusted reference set,
+where
+\begin{equation}
+    m=\left\lceil0.01N\right\rceil.
+    \label{eq:reference_budget}
+\end{equation}
+All samples in $\mathcal{R}$ belong to the defender-selected semantic
+class $y_r$. This class information is used only to construct
+$\mathcal{R}$ and select the corresponding probe; it is never provided
+to the contrastive objective or the clustering algorithm.
+
+\subsection{Reference-Augmented Diagnostic Training}
+\label{sec:diagnostic_training}
+
+Let $G$ be a fixed, pretrained semantic probe generator. We define the
+probe transformation as
+\begin{equation}
+    \mathcal{P}_{G,\epsilon}(x)
+    =
+    \operatorname{clip}_{[0,1]}
+    \left(
+        \operatorname{clip}_{[x-\epsilon,x+\epsilon]}(G(x))
+    \right),
+    \label{eq:probe_transform}
+\end{equation}
+where clipping is performed element-wise and $\epsilon$ bounds the
+maximum input perturbation. The generator is trained once, kept fixed
+throughout the defense, and reused across datasets and encoder
+settings. It is not updated using $\mathcal{D}$ and does not require
+knowledge of the attack trigger or the attack target class.
+
+Before diagnostic training, the probe is applied to every reference
+sample to form
+\begin{equation}
+    \mathcal{R}^{p}
+    =
+    \{\mathcal{P}_{G,\epsilon}(r_j):r_j\in\mathcal{R}\}.
+    \label{eq:probed_reference_set}
+\end{equation}
+The diagnostic training set is
+$\mathcal{S}=\mathcal{D}\cup\mathcal{R}^{p}$. Training samples and
+probe-transformed reference samples use the same stochastic
+augmentation distribution. For each $s\in\mathcal{S}$, two views
+$a_1(s)$ and $a_2(s)$ are independently sampled from this distribution
+and processed by the selected CL algorithm. The diagnostic encoder is
+optimized as
+\begin{equation}
+    \theta^{d}
+    =
+    \arg\min_{\theta}
+    \frac{1}{|\mathcal{S}|}
+    \sum_{s\in\mathcal{S}}
+    \ell_{\mathrm{CL}}
+    \left(a_1(s),a_2(s);\theta\right),
+    \label{eq:diagnostic_objective}
+\end{equation}
+where $\ell_{\mathrm{CL}}$ denotes the objective of the underlying
+contrastive or self-supervised learner. No reference label, poison
+annotation, or supervised auxiliary loss is used. Each epoch traverses
+both $\mathcal{D}$ and $\mathcal{R}^{p}$ once, preventing the smaller
+reference set from being repeatedly oversampled.
+
+The role of $\mathcal{R}^{p}$ is to expose the diagnostic encoder to a
+trusted instance of the probe-induced semantic pattern during
+representation learning. This stage produces an encoder for detection,
+not the final encoder deployed after cleansing.
+
+\subsection{Probe-Transformed Representation Extraction}
+\label{sec:probe_feature_extraction}
+
+After diagnostic training, we freeze the encoder and apply the same
+probe transformation to every training and reference sample. Let
+$h_{\theta^{d}}$ denote the backbone of the diagnostic encoder. The
+representations used by the detector are
+\begin{equation}
+    \mathbf{z}_{i}^{p}
+    =
+    \frac{
+        h_{\theta^{d}}(\mathcal{P}_{G,\epsilon}(x_i))
+    }{
+        \|h_{\theta^{d}}(\mathcal{P}_{G,\epsilon}(x_i))\|_2
+    },
+    \quad x_i\in\mathcal{D},
+    \label{eq:training_probe_feature}
+\end{equation}
+and
+\begin{equation}
+    \mathbf{q}_{j}^{p}
+    =
+    \frac{
+        h_{\theta^{d}}(\mathcal{P}_{G,\epsilon}(r_j))
+    }{
+        \|h_{\theta^{d}}(\mathcal{P}_{G,\epsilon}(r_j))\|_2
+    },
+    \quad r_j\in\mathcal{R}.
+    \label{eq:reference_probe_feature}
+\end{equation}
+We use only the normalized backbone output of each probe-transformed
+sample. The original representation and projection-head output are not
+concatenated with this feature. Consequently, detection depends on the
+geometry exposed by a common semantic intervention rather than on an
+explicit original-to-probed displacement score.
+
+\subsection{Shared Manifold Construction}
+\label{sec:shared_manifold}
+
+We concatenate the probe-transformed training and reference features
+to form
+\begin{equation}
+    \mathbf{Z}
+    =
+    [\mathbf{z}_{1}^{p},\ldots,\mathbf{z}_{N}^{p},
+      \mathbf{q}_{1}^{p},\ldots,\mathbf{q}_{m}^{p}]^{\top}.
+    \label{eq:joint_feature_matrix}
+\end{equation}
+UMAP maps $\mathbf{Z}$ to a two-dimensional manifold using cosine
+distance~\cite{McInnes2018UMAP},
+\begin{equation}
+    \mathbf{U}
+    =
+    \operatorname{UMAP}_{\mathrm{cos}}(\mathbf{Z})
+    =
+    [\mathbf{u}_{1},\ldots,\mathbf{u}_{N},
+      \mathbf{v}_{1},\ldots,\mathbf{v}_{m}]^{\top},
+    \label{eq:shared_umap}
+\end{equation}
+where $\mathbf{u}_i\in\mathbb{R}^{2}$ and
+$\mathbf{v}_j\in\mathbb{R}^{2}$ are the embedded training and
+reference coordinates, respectively. Joint fitting allows the trusted
+reference features to influence neighborhood-graph construction and
+the resulting low-dimensional geometry. It does not, however, assign
+a clean label to nearby training samples.
+
+Before density clustering, each coordinate of the training embedding
+is standardized using statistics computed from
+$\{\mathbf{u}_i\}_{i=1}^{N}$:
+\begin{equation}
+    \widetilde{u}_{ik}
+    =
+    \frac{u_{ik}-\mu_k}{\sigma_k},
+    \qquad k\in\{1,2\}.
+    \label{eq:umap_standardization}
+\end{equation}
+The reference coordinates are used to construct the shared manifold
+but are excluded from this standardization and from the subsequent
+clustering decision.
+
+\subsection{Density-Based Sample Cleansing}
+\label{sec:density_cleansing}
+
+We apply DBSCAN~\cite{Ester1996DBSCAN} with radius parameter
+$\varepsilon_{d}$ and minimum neighborhood size $n_{\min}$ to the standardized training coordinates
+$\{\widetilde{\mathbf{u}}_i\}_{i=1}^{N}$. Let
+\begin{equation}
+    c_i
+    =
+    \operatorname{DBSCAN}
+    (\widetilde{\mathbf{u}}_i;\varepsilon_d,n_{\min}),
+    \label{eq:dbscan_assignment}
+\end{equation}
+where $c_i=-1$ denotes a noise point and nonnegative values denote
+density-connected clusters. Among all non-noise clusters, we retain
+the largest one,
+\begin{equation}
+    c^{\star}
+    =
+    \arg\max_{c\geq0}
+    \sum_{i=1}^{N}\mathbb{I}[c_i=c].
+    \label{eq:largest_cluster}
+\end{equation}
+The sample-level decision is then
+\begin{equation}
+    \delta(x_i)
+    =
+    \mathbb{I}[c_i\neq c^{\star}].
+    \label{eq:cleansing_decision}
+\end{equation}
+Thus, every noise point and every sample belonging to a smaller
+non-noise cluster is marked as suspicious. If DBSCAN returns exactly
+one valid cluster, that cluster is retained and only its noise points
+are removed. If it returns no valid cluster, the procedure terminates
+without producing a cleansed dataset, rather than treating all samples
+as poisoned. This fail-closed rule prevents a degenerate clustering
+result from causing dataset-wide deletion.
+
+The decision rule does not use $\rho$, ground-truth poison indices,
+attack-specific thresholds, or the distance to a reference centroid.
+Its key structural assumption is instead that, after diagnostic
+probing, poisoned samples do not constitute the largest
+density-connected component.
+
+\subsection{Final Encoder Training}
+\label{sec:final_training}
+
+After removing the detected samples, we obtain
+$\widehat{\mathcal{D}}_{b}$ as defined in
+(\ref{eq:cleansingsets}). A new encoder is initialized independently
+and trained from scratch on this cleansed dataset:
+\begin{equation}
+    \theta^{\mathrm{final}}
+    =
+    \arg\min_{\theta}
+    \frac{1}{|\widehat{\mathcal{D}}_{b}|}
+    \sum_{x\in\widehat{\mathcal{D}}_{b}}
+    \ell_{\mathrm{CL}}
+    \left(a_1(x),a_2(x);\theta\right).
+    \label{eq:final_training_objective}
+\end{equation}
+Neither the trusted reference set nor its probe-transformed counterpart
+is included in this stage. The semantic probe and diagnostic encoder
+are also discarded. This separation ensures that the final model is
+trained only on the retained portion of the original pre-training
+corpus and that the reference data affect deployment solely through
+the preceding cleansing decision.
 \section{Experimental Evaluation}\label{sec:experiment}
 % TODO
 \section{Discussion and Limitations}\label{sec:discussion}
