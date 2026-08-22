@@ -356,31 +356,29 @@ to the contrastive objective or the clustering algorithm.
 \subsection{Reference-Augmented Diagnostic Training}
 \label{sec:diagnostic_training}
 
-Let $G$ be a fixed, pretrained semantic probe generator. We define the
-probe transformation as
-\begin{equation}
-    \mathcal{P}_{G,\epsilon}(x)
-    =
-    \operatorname{clip}_{[0,1]}
-    \left(
-        \operatorname{clip}_{[x-\epsilon,x+\epsilon]}(G(x))
-    \right),
-    \label{eq:probe_transform}
-\end{equation}
-where clipping is performed element-wise and $\epsilon$ bounds the
-maximum input perturbation. The generator is trained once, kept fixed
-throughout the defense, and reused across datasets and encoder
-settings. It is not updated using $\mathcal{D}$ and does not require
-knowledge of the attack trigger or the attack target class.
+Let $\mathcal{P}_{\epsilon}$ denote a fixed semantic probe transformation
+associated with the defender-selected reference class $y_r$, where
+$\epsilon$ bounds the maximum input perturbation. The transformation is
+implemented by a pretrained generator that remains frozen throughout
+the defense and requires no knowledge of the attack trigger or target
+class.
 
 Before diagnostic training, the probe is applied to every reference
 sample to form
 \begin{equation}
     \mathcal{R}^{p}
     =
-    \{\mathcal{P}_{G,\epsilon}(r_j):r_j\in\mathcal{R}\}.
+    \{\mathcal{P}_{\epsilon}(r_j):r_j\in\mathcal{R}\}.
     \label{eq:probed_reference_set}
 \end{equation}
+This construction deliberately introduces a defender-controlled,
+backdoor-like association into the trusted reference set: the common
+probe pattern plays a role analogous to a trigger, while the shared
+reference semantics provide the associated target concept. Unlike
+malicious poisoning, however, this association is introduced only to
+train a diagnostic encoder and does not alter the untrusted samples or
+the final cleansed model.
+
 The diagnostic training set is
 $\mathcal{S}=\mathcal{D}\cup\mathcal{R}^{p}$. Training samples and
 probe-transformed reference samples use the same stochastic
@@ -404,10 +402,12 @@ annotation, or supervised auxiliary loss is used. Each epoch traverses
 both $\mathcal{D}$ and $\mathcal{R}^{p}$ once, preventing the smaller
 reference set from being repeatedly oversampled.
 
-The role of $\mathcal{R}^{p}$ is to expose the diagnostic encoder to a
-trusted instance of the probe-induced semantic pattern during
-representation learning. This stage produces an encoder for detection,
-not the final encoder deployed after cleansing.
+Because every element of $\mathcal{R}^{p}$ couples the same probe with
+the same reference semantics, unsupervised representation learning is
+repeatedly exposed to this controlled association. The resulting
+diagnostic encoder can therefore reveal how training samples respond to
+a competing backdoor-like semantic cue. This encoder is used only for
+detection and is not the final encoder deployed after cleansing.
 
 \subsection{Probe-Transformed Representation Extraction}
 \label{sec:probe_feature_extraction}
@@ -420,9 +420,9 @@ representations used by the detector are
     \mathbf{z}_{i}^{p}
     =
     \frac{
-        h_{\theta^{d}}(\mathcal{P}_{G,\epsilon}(x_i))
+        h_{\theta^{d}}(\mathcal{P}_{\epsilon}(x_i))
     }{
-        \|h_{\theta^{d}}(\mathcal{P}_{G,\epsilon}(x_i))\|_2
+        \|h_{\theta^{d}}(\mathcal{P}_{\epsilon}(x_i))\|_2
     },
     \quad x_i\in\mathcal{D},
     \label{eq:training_probe_feature}
@@ -432,9 +432,9 @@ and
     \mathbf{q}_{j}^{p}
     =
     \frac{
-        h_{\theta^{d}}(\mathcal{P}_{G,\epsilon}(r_j))
+        h_{\theta^{d}}(\mathcal{P}_{\epsilon}(r_j))
     }{
-        \|h_{\theta^{d}}(\mathcal{P}_{G,\epsilon}(r_j))\|_2
+        \|h_{\theta^{d}}(\mathcal{P}_{\epsilon}(r_j))\|_2
     },
     \quad r_j\in\mathcal{R}.
     \label{eq:reference_probe_feature}
