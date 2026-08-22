@@ -10,7 +10,6 @@
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{cite}
-\usepackage{algorithm}
 \usepackage{algpseudocode}
 \usepackage[caption=false,font=footnotesize]{subfig}
 \usepackage{url}
@@ -547,40 +546,40 @@ trained only on the retained portion of the original pre-training
 corpus and that the reference data affect deployment solely through
 the preceding cleansing decision.
 
-Algorithm~\ref{alg:cleansing} summarizes the complete executable
-procedure. Ground-truth poison indices and attack-specific information
-are absent from every step; they are used only after cleansing to
-evaluate the returned decisions.
+Fig.~\ref{fig:cleansing_pseudocode} summarizes the executable
+procedure. For compactness, transformations of a set are understood to
+act element-wise. Ground-truth poison indices and attack-specific
+information are absent from every step; they are used only after
+cleansing to evaluate the returned decisions.
 
-\begin{algorithm}[!t]
-\caption{Reference-Assisted Poisoned-Sample Cleansing}
-\label{alg:cleansing}
+\begin{figure}[!t]
+\centering
+\begin{minipage}{0.98\columnwidth}
+\footnotesize
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+\setlength{\algorithmicindent}{1.1em}
+\hrule
+\vspace{0.4em}
 \begin{algorithmic}[1]
-\Require Untrusted corpus $\mathcal{D}$; trusted set $\mathcal{R}$;
-fixed probe $\mathcal{P}_{\epsilon}$; CL objective
-$\ell_{\mathrm{CL}}$; UMAP parameters $\phi_U$; DBSCAN parameters
-$\phi_D$
-\Ensure Cleansed set $\widehat{\mathcal{D}}_b$, suspicious set
-$\widehat{\mathcal{D}}_p$, and final encoder $f_{\theta^{\mathrm{final}}}$
-\State $\mathcal{R}^{p}\gets
-\{\mathcal{P}_{\epsilon}(r):r\in\mathcal{R}\}$
-\State Independently initialize diagnostic encoder $f_{\theta^{d}}$
+\Require $\mathcal{D}$, $\mathcal{R}$, $\mathcal{P}_{\epsilon}$,
+$\ell_{\mathrm{CL}}$, $\phi_U$, and $\phi_D$
+\Ensure $\widehat{\mathcal{D}}_b$, $\widehat{\mathcal{D}}_p$, and
+$f_{\theta^{\mathrm{final}}}$
+\Statex \textit{Stage 1: Reference-augmented diagnostic training}
+\State $\mathcal{R}^{p}\gets\mathcal{P}_{\epsilon}(\mathcal{R})$
 \State $\theta^{d}\gets
 \operatorname{TrainSSL}(\mathcal{D}\cup\mathcal{R}^{p};
-\ell_{\mathrm{CL}})$ using the same augmentations
+\ell_{\mathrm{CL}})$ from a fresh initialization
+\Statex \textit{Stage 2: Probe-assisted sample cleansing}
 \State $\mathbf{Z}_{D}\gets
-\{\operatorname{norm}(h_{\theta^{d}}(\mathcal{P}_{\epsilon}(x))):
-x\in\mathcal{D}\}$
+\operatorname{Norm}(h_{\theta^{d}}(\mathcal{P}_{\epsilon}(\mathcal{D})))$
 \State $\mathbf{Z}_{R}\gets
-\{\operatorname{norm}(h_{\theta^{d}}(\mathcal{P}_{\epsilon}(r))):
-r\in\mathcal{R}\}$
+\operatorname{Norm}(h_{\theta^{d}}(\mathcal{P}_{\epsilon}(\mathcal{R})))$
 \State $(\mathbf{U}_{D},\mathbf{U}_{R})\gets
-\operatorname{UMAP}_{\mathrm{cos}}([\mathbf{Z}_{D};\mathbf{Z}_{R}];
-\phi_U)$
-\State $\widetilde{\mathbf{U}}_{D}\gets
-\operatorname{Standardize}(\mathbf{U}_{D})$
+\operatorname{UMAP}_{\mathrm{cos}}([\mathbf{Z}_{D};\mathbf{Z}_{R}];\phi_U)$
 \State $\mathbf{c}\gets
-\operatorname{DBSCAN}(\widetilde{\mathbf{U}}_{D};\phi_D)$
+\operatorname{DBSCAN}(\operatorname{Standardize}(\mathbf{U}_{D});\phi_D)$
 \State $\mathcal{C}\gets\{c_i:c_i\geq0\}$
 \If{$\mathcal{C}=\varnothing$}
     \State \textbf{return} \textsc{NoValidCluster}
@@ -591,15 +590,22 @@ r\in\mathcal{R}\}$
 \{x_i\in\mathcal{D}:c_i\neq c^{\star}\}$
 \State $\widehat{\mathcal{D}}_b\gets
 \mathcal{D}\setminus\widehat{\mathcal{D}}_p$
-\State Independently initialize final encoder
-$f_{\theta^{\mathrm{final}}}$
+\Statex \textit{Stage 3: Final encoder training}
 \State $\theta^{\mathrm{final}}\gets
-\operatorname{TrainSSL}(\widehat{\mathcal{D}}_b;
-\ell_{\mathrm{CL}})$
+\operatorname{TrainSSL}(\widehat{\mathcal{D}}_b;\ell_{\mathrm{CL}})$
+from a fresh initialization
 \State \textbf{return} $\widehat{\mathcal{D}}_b$,
 $\widehat{\mathcal{D}}_p$, and $f_{\theta^{\mathrm{final}}}$
 \end{algorithmic}
-\end{algorithm}
+\vspace{0.25em}
+\hrule
+\end{minipage}
+\caption{Pseudocode of the proposed reference-assisted
+poisoned-sample cleansing procedure. Only training embeddings
+$\mathbf{U}_{D}$ are standardized and clustered; reference embeddings
+$\mathbf{U}_{R}$ influence only the jointly fitted UMAP manifold.}
+\label{fig:cleansing_pseudocode}
+\end{figure}
 
 \section{Experimental Evaluation}\label{sec:experiment}
 \subsection{Experimental Setup}
