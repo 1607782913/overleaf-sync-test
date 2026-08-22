@@ -555,7 +555,168 @@ trained only on the retained portion of the original pre-training
 corpus and that the reference data affect deployment solely through
 the preceding cleansing decision.
 \section{Experimental Evaluation}\label{sec:experiment}
-% TODO
+\subsection{Experimental Setup}
+\label{sec:experimental_setup}
+
+Following the evaluation structure commonly used in poisoned-sample
+cleansing studies~\cite{Chen2025AUTO}, we assess the defense from two
+complementary perspectives: sample-level detection and end-to-end
+backdoor mitigation. The former measures whether poisoned samples are
+removed without excessive loss of benign data, whereas the latter tests
+whether an encoder trained from scratch on the cleansed corpus suppresses
+the backdoor while preserving clean-data utility.
+
+\subsubsection{Datasets and Trusted Reference Sets}
+We conduct experiments on CIFAR-10, CIFAR-100, and ImageNet-100, covering
+small-resolution benchmarks and a larger, more diverse pre-training
+corpus. CIFAR-10 and CIFAR-100 each contain 50,000 training images. For
+both datasets, the trusted reference set contains 500 images, corresponding
+to 1\% of the training-set size. For ImageNet-100, we use a fixed reference
+set of 1,300 images, which is approximately 1\% of the pre-training corpus.
+All reference images belong to one defender-selected semantic class. Their
+class labels are used only to construct the reference set and select the
+semantic probe; they are never provided to the contrastive objective or the
+clustering algorithm. The untrusted and reference samples use the same
+stochastic augmentation distribution during diagnostic training.
+
+\subsubsection{Attacks, Learners, and Architecture}
+We evaluate three representative data-poisoning attacks with different
+trigger constructions: the patch-based SSL-Backdoor attack~\cite{Saha2022SSLBackdoor},
+the frequency-domain CTRL attack~\cite{Li2023CTRL}, and the
+augmentation-aware CorruptEncoder attack~\cite{Zhang2024CorruptEncoder}.
+The default poison ratios are 1\% for SSL-Backdoor and CTRL and 0.5\% for
+CorruptEncoder. Unless otherwise specified, all encoders use ResNet-18.
+SimCLR~\cite{Chen2020SimCLR} serves as the primary contrastive learner,
+and MoCoV3 and BYOL~\cite{Grill2020BYOL} are used to evaluate transfer
+across self-supervised objectives. SimCLR and MoCoV3 are evaluated on all
+three datasets, while the required BYOL evaluation focuses on
+ImageNet-100. All formal training runs use random seed 42.
+
+\subsubsection{Three-Stage Evaluation Protocol}
+Each attack--learner--dataset configuration follows the three stages
+summarized in Table~\ref{tab:three_stage_protocol}. First, we train the
+diagnostic encoder on the poisoned training corpus together with the
+probe-transformed reference set and generate a set of suspicious sample
+indices. Second, we train a standard poisoned encoder on the original
+unfiltered corpus to obtain the no-defense clean accuracy and attack
+success rate. Third, we remove the samples detected in the first stage and
+train an independently initialized encoder from scratch on the retained
+corpus. The reference set, semantic probe, and diagnostic encoder are not
+used in the second or third stage. This separation prevents the diagnostic
+model from being evaluated as the deployed model and isolates the effect
+of data cleansing.
+
+\begin{table}[!t]
+    \centering
+    \caption{Three-stage training protocol. The reference set is used only
+    in diagnostic training.}
+    \label{tab:three_stage_protocol}
+    \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{lccc}
+        \toprule
+        Dataset & Diagnostic & Poisoned & CleanPost \\
+        & encoder & encoder & encoder \\
+        \midrule
+        CIFAR-10/100 & 500 epochs & 800 epochs & 800 epochs \\
+        ImageNet-100 & 300 epochs & 500 epochs & 500 epochs \\
+        \bottomrule
+    \end{tabular}}
+\end{table}
+
+The second-stage poisoned encoder and the third-stage CleanPost encoder
+use the same learner, architecture, augmentation pipeline, attack
+configuration, and downstream evaluation protocol. Their only intended
+difference is the removal of the suspicious indices before third-stage
+training. For CIFAR experiments, every formal stage is rerun with the
+500-image reference protocol so that the detection indices and downstream
+models share a consistent code version and data configuration. Existing
+ImageNet-100 runs use the 1,300-image reference protocol and are retained
+only after configuration and artifact verification.
+
+\subsubsection{Detection Configuration}
+The semantic probe is pre-trained once, frozen, and reused across all
+datasets, attacks, and learners. After diagnostic training, we extract the
+$L_2$-normalized backbone representation of every probe-transformed
+training and reference sample. The two sets are jointly embedded by UMAP
+with cosine distance, two output dimensions, 15 neighbors,
+$\texttt{min\_dist}=0.1$, and random state 0. We standardize only the
+embedded training coordinates and apply DBSCAN with
+$\varepsilon_d=1.0$ and $n_{\min}=15$. The largest non-noise cluster is
+retained; all smaller clusters and noise points are removed. These
+parameters are fixed before inspecting the ground-truth poison indices.
+
+\subsubsection{Compared Defenses}
+The representative baseline protocol includes ASSET~\cite{Pan2023ASSET},
+AUTO~\cite{Chen2025AUTO}, and PatchSearch~\cite{Tejankar2023PatchSearch}
+under a common SimCLR--ResNet-18 setting on ImageNet-100. Each applicable
+baseline must output a cleansed dataset, after which a new encoder is
+trained from scratch using the same downstream evaluation protocol as our
+method. Because PatchSearch explicitly localizes spatial patches, it is
+evaluated on SSL-Backdoor; unsupported distributed-trigger settings are
+reported as not applicable rather than modifying the attacks to match the
+baseline. Published values obtained under different poison ratios,
+architectures, or training schedules are not mixed with our reproduced
+comparisons.
+
+\subsection{Evaluation Metrics and Reporting Protocol}
+\label{sec:evaluation_metrics}
+
+\subsubsection{Poisoned-Sample Detection}
+Let TP and FN denote detected and missed poisoned samples, respectively,
+and let FP and TN denote removed and retained benign samples. We report
+the true-positive rate (TPR), false-positive rate (FPR), precision, and
+F1 score:
+\begin{equation}
+    \mathrm{TPR}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}},\qquad
+    \mathrm{FPR}=\frac{\mathrm{FP}}{\mathrm{FP}+\mathrm{TN}},
+    \label{eq:detection_rates}
+\end{equation}
+\begin{equation}
+    \mathrm{Precision}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}},\qquad
+    \mathrm{F1}=\frac{2\,\mathrm{Precision}\,\mathrm{TPR}}
+    {\mathrm{Precision}+\mathrm{TPR}}.
+    \label{eq:detection_precision_f1}
+\end{equation}
+We additionally report the number and proportion of removed samples,
+noise points, and non-noise DBSCAN clusters. Unlike score-based detectors
+that naturally produce a ranking, the current largest-cluster rule outputs
+a hard cleansing decision. We therefore do not report AUROC or AUPRC
+unless a continuous, pre-specified anomaly score is introduced.
+
+\subsubsection{End-to-End Backdoor Mitigation}
+We evaluate the poisoned and CleanPost encoders using linear evaluation:
+the encoder is frozen and only a linear classifier is trained on the
+corresponding labeled evaluation split. Clean top-1 accuracy (ACC)
+measures utility on unmodified test images. Attack success rate (ASR)
+measures the fraction of triggered, non-target test inputs classified as
+the attacker-selected target class. We report both $(\mathrm{ACC}_p,
+\mathrm{ASR}_p)$ for the standard poisoned encoder and
+$(\mathrm{ACC}_d,\mathrm{ASR}_d)$ for the encoder trained on the cleansed
+corpus. Detection quality alone is not treated as evidence of a successful
+defense; a valid result must reduce ASR while preserving clean accuracy.
+
+For each learner--dataset pair, a clean-only encoder provides an attack
+validity control. We apply the same three trigger transformations to this
+encoder and report the resulting target prediction frequency as the
+\emph{clean-model triggered target rate}, not as ASR. If a poisoned
+encoder does not raise the target prediction frequency above this clean
+control, the corresponding attack is marked ineffective and is not counted
+as evidence of defense success.
+
+\subsubsection{Reproducibility and Statistical Scope}
+For every run, we retain the complete configuration, code revision,
+environment manifest, dataset and checkpoint hashes, logs, suspicious
+indices, per-sample decisions, and final metrics. Formal model training is
+performed once with seed 42; consequently, we report the individual run
+rather than mean and standard deviation and do not make claims of
+statistical stability across training seeds. UMAP random-state experiments
+are reported separately as clustering-sensitivity analyses and do not
+substitute for independent model-training repetitions. We also record the
+wall-clock time and peak GPU memory for diagnostic training, feature
+extraction, manifold construction, clustering, and final retraining.
+
+% Detection, mitigation, ablation, and efficiency results will be inserted
+% only after the corresponding artifacts pass configuration and hash audits.
 \section{Discussion and Limitations}\label{sec:discussion}
 % TODO
 \section{Conclusion}\label{sec:conclusion}
