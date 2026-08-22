@@ -90,7 +90,7 @@ The attack has two objectives. First, a downstream classifier $g_{\phi}\circ f_{
 \subsection{Defender's Knowledge and Capabilities}
 The defender has full access to the unlabeled pre-training dataset $\mathcal{D}$ and can train an encoder, extract backbone features, and apply input transformations. The defender does not know the class labels, poison annotations, trigger pattern, target class, attack type, or poison ratio. The detector must therefore operate without pre-specifying the number of poisoned samples or semantic clusters.
 
-In addition, the defender holds a trusted reference set $\mathcal{R}$ containing clean images from one manually selected class $y_r$. We set $|\mathcal{R}|=\lceil0.01|\mathcal{D}|\rceil$, so that the reference budget scales with the pre-training dataset. The reference images may come from a different dataset and need not match the class distribution or data-collection process of $\mathcal{D}_{b}$; they only need a compatible visual modality and input format. Their labels are used solely to select the probe target class and never enter a supervised loss, clustering decision, or poison supervision.
+In addition, the defender holds a trusted reference set $\mathcal{R}$ containing clean images from one manually selected class $y_r$. We set its size to approximately 1\% of the pre-training corpus: 500 images for CIFAR-10 and CIFAR-100, and 1,300 images for ImageNet-100. The reference images may come from a different dataset and need not match the class distribution or data-collection process of $\mathcal{D}_{b}$; they only need a compatible visual modality and input format. Their labels are used solely to select the probe target class and never enter a supervised loss, clustering decision, or poison supervision.
 
 Let $G$ denote the fixed semantic probe generator associated with class $y_r$. The generator is pre-trained once and reused across datasets and encoder settings. Before encoder training, the defender applies $G$ to every reference image and trains the encoder on $\mathcal{D}\cup G(\mathcal{R})$ using the same unsupervised CL objective and augmentation pipeline; the reference labels do not enter the loss. After training, $G$ is applied to every sample in $\mathcal{D}$, with each perturbation clipped to an $\ell_{\infty}$ radius of $8/255$. The backbone features of $G(\mathcal{D})$ and $G(\mathcal{R})$ are $L_2$-normalized and jointly embedded with UMAP. DBSCAN is fitted only to the standardized coordinates of the training samples. Ground-truth poison indices are used only to evaluate detection performance and never affect the clustering decision.
 
@@ -343,9 +343,11 @@ Let $N=|\mathcal{D}|$ and let
 $\mathcal{R}=\{r_j\}_{j=1}^{m}$ denote the trusted reference set,
 where
 \begin{equation}
-    m=\left\lceil0.01N\right\rceil.
+    m\approx0.01N.
     \label{eq:reference_budget}
 \end{equation}
+Specifically, we use $m=500$ for CIFAR-10 and CIFAR-100 and
+$m=1{,}300$ for ImageNet-100.
 All samples in $\mathcal{R}$ belong to the defender-selected semantic
 class $y_r$. This class information is used only to construct
 $\mathcal{R}$ and select the corresponding probe; it is never provided
