@@ -634,8 +634,8 @@ augmentation-aware CorruptEncoder attack~\cite{Zhang2024CorruptEncoder}.
 The default poison ratios are 1\% for SSL-Backdoor and CTRL and 0.5\% for
 CorruptEncoder. Unless otherwise specified, all encoders use ResNet-18.
 SimCLR~\cite{Chen2020SimCLR} serves as the primary contrastive learner,
-and MoCoV3 and BYOL~\cite{Grill2020BYOL} are used to evaluate transfer
-across self-supervised objectives. SimCLR and MoCoV3 are evaluated on all
+and MoCoV3~\cite{Chen2021MoCoV3} and BYOL~\cite{Grill2020BYOL} are used
+to evaluate transfer across self-supervised objectives. SimCLR and MoCoV3 are evaluated on all
 three datasets, while the required BYOL evaluation focuses on
 ImageNet-100. All formal training runs use random seed 42.
 
