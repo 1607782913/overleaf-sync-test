@@ -762,8 +762,61 @@ substitute for independent model-training repetitions. We also record the
 wall-clock time and peak GPU memory for diagnostic training, feature
 extraction, manifold construction, clustering, and final retraining.
 
-% Detection, mitigation, ablation, and efficiency results will be inserted
-% only after the corresponding artifacts pass configuration and hash audits.
+\subsection{Poisoned-Sample Detection Results}
+\label{sec:detection_results}
+
+Table~\ref{tab:detection_results} summarizes the sample-level detection
+performance across three self-supervised learners, three datasets, and three
+backdoor attacks. The detector achieves consistently high TPR on all evaluated
+configurations. Under SimCLR, the F1 score remains above 97\% for every attack
+and dataset, indicating that the poisoned samples are removed with few benign
+samples mistakenly discarded. The results also reveal a learner-dependent
+failure mode. On ImageNet-100, MoCoV3 and BYOL retain high TPR but incur markedly
+higher FPR for SSL-Backdoor and CorruptEncoder. Because benign samples greatly
+outnumber poisoned samples, these false positives substantially reduce the F1
+score. This distinction emphasizes that a high TPR alone is insufficient for
+assessing a cleansing method and motivates the end-to-end ACC and ASR evaluation
+described in Section~\ref{sec:evaluation_metrics}.
+
+\begin{table*}[!t]
+    \centering
+    \caption{Poisoned-sample detection performance across self-supervised
+    learners, datasets, and attacks. All values are percentages.}
+    \label{tab:detection_results}
+    \scriptsize
+    \setlength{\tabcolsep}{3.2pt}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{llccc ccc ccc}
+        \toprule
+        \multirow{2}{*}{Learner} & \multirow{2}{*}{Dataset}
+        & \multicolumn{3}{c}{SSL-Backdoor}
+        & \multicolumn{3}{c}{CTRL}
+        & \multicolumn{3}{c}{CorruptEncoder} \\
+        \cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}
+        & & TPR $\uparrow$ & FPR $\downarrow$ & F1 $\uparrow$
+          & TPR $\uparrow$ & FPR $\downarrow$ & F1 $\uparrow$
+          & TPR $\uparrow$ & FPR $\downarrow$ & F1 $\uparrow$ \\
+        \midrule
+        \multirow{3}{*}{SimCLR--ResNet-18}
+          & CIFAR-10     & 100.00 & 0.00 & 100.00 & 100.00 & 0.01 & 99.70 & 96.00 & 0.00 & 97.76 \\
+          & CIFAR-100    & 99.80  & 0.00 & 99.90  & 99.20  & 0.01 & 99.00 & 94.80 & 0.00 & 97.33 \\
+          & ImageNet-100 & 98.38  & 0.01 & 98.65  & 99.92  & 0.00 & 99.96 & 99.85 & 0.00 & 99.85 \\
+        \midrule
+        \multirow{3}{*}{MoCoV3--ResNet-18}
+          & CIFAR-10     & 99.80  & 0.00 & 99.90  & 99.40  & 0.02 & 98.91 & 99.60  & 0.00 & 99.40 \\
+          & CIFAR-100    & 100.00 & 0.00 & 99.90  & 99.60  & 0.01 & 99.20 & 97.60  & 0.01 & 98.19 \\
+          & ImageNet-100 & 98.15  & 1.84 & 52.22  & 99.00  & 0.00 & 99.31 & 100.00 & 1.79 & 36.07 \\
+        \midrule
+        \multirow{3}{*}{BYOL--ResNet-18}
+          & CIFAR-10     & 100.00 & 0.14 & 93.55 & 99.00  & 0.13 & 93.66 & 99.20 & 0.42 & 69.96 \\
+          & CIFAR-100    & 100.00 & 0.11 & 94.70 & 100.00 & 0.58 & 77.58 & 97.20 & 0.38 & 71.37 \\
+          & ImageNet-100 & 98.62  & 1.71 & 54.32 & 99.15  & 0.82 & 71.24 & 99.85 & 1.60 & 38.67 \\
+        \bottomrule
+    \end{tabular}}
+\end{table*}
+
+% Mitigation, ablation, and efficiency results will be inserted only after
+% the corresponding artifacts pass configuration and hash audits.
 \section{Discussion and Limitations}\label{sec:discussion}
 % TODO
 \section{Conclusion}\label{sec:conclusion}
