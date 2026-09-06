@@ -30,7 +30,7 @@
 \maketitle
 
 \begin{abstract}
-Contrastive learning (CL) learns transferable representations from large-scale unlabeled data, but its reliance on weakly curated pre-training datasets makes it vulnerable to data-poisoning backdoor attacks. We study poisoned-sample detection and cleansing for unlabeled CL datasets. Our framework incorporates a probe-transformed trusted reference set into unsupervised encoder training. After training, the same fixed, pre-trained semantic probe is applied to the training samples, and the normalized backbone features of the transformed training and reference samples are jointly embedded with UMAP. DBSCAN is then applied to the training embeddings, and samples outside the largest non-noise cluster are flagged as suspicious under a minority-poisoning assumption. Preliminary BYOL experiments show strong poisoned-sample separation for SSL-Backdoor and CTRL on CIFAR; however, the detector fails to recover CorruptEncoder poisons in the evaluated CIFAR settings, and two ImageNet-100 configurations remain incomplete. These results demonstrate the potential of semantic probing while identifying important limitations that must be resolved before claiming a general defense.
+Contrastive learning (CL) learns transferable representations from large-scale unlabeled data, but its reliance on weakly curated pre-training datasets makes it vulnerable to data-poisoning backdoor attacks. We study poisoned-sample detection and cleansing for unlabeled CL datasets. Our framework incorporates a probe-transformed trusted reference set into unsupervised encoder training. After training, the same fixed, pre-trained semantic probe is applied to the training samples, and the normalized backbone features of the transformed training and reference samples are jointly embedded with UMAP. DBSCAN is then applied to the training embeddings, and samples outside the largest non-noise cluster are flagged as suspicious under a minority-poisoning assumption. Across the evaluated SimCLR, MoCoV3, and BYOL configurations on CIFAR-10, CIFAR-100, and ImageNet-100, the detector maintains high poisoned-sample recall, although false positives increase for MoCoV3 and BYOL on ImageNet-100. Among the 26 completed poisoned/CleanPost pairs, the recorded ASR decreases in 25 cases, while clean accuracy changes by at most one percentage point in 19 cases; the BYOL--ImageNet-100 CTRL CleanPost run is still in progress. These results demonstrate the potential of semantic probing while underscoring the need for clean-model attack-validity controls and further robustness evaluation before claiming a general defense.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -55,7 +55,7 @@ The main contributions of this work are summarized as follows:
     \item We introduce a reusable semantic probe for poisoned-sample detection to transform the feature distributions of clean and poisoned samples.
     \item We incorporate probe-transformed trusted reference samples into unsupervised encoder training and subsequent joint feature analysis without using their labels as supervision.
     \item We design a density-based detection rule that requires neither poison annotations nor a known poison ratio: the largest DBSCAN cluster is retained, while other clusters and noise points are flagged as suspicious.
-    \item We identify the assumptions and failure modes of the current detector and define the end-to-end evaluations needed to assess post-cleansing attack success, clean accuracy, robustness, and computational cost.
+    \item We evaluate end-to-end post-cleansing ACC and ASR with paired poisoned and CleanPost encoders across multiple learners, datasets, and attacks, while separating raw mitigation outcomes from attack-validity controls, robustness analyses, and statistical-stability claims.
 \end{itemize}
 
 \section{Related Work}\label{sec:relatedwork}
@@ -635,9 +635,9 @@ The default poison ratios are 1\% for SSL-Backdoor and CTRL and 0.5\% for
 CorruptEncoder. Unless otherwise specified, all encoders use ResNet-18.
 SimCLR~\cite{Chen2020SimCLR} serves as the primary contrastive learner,
 and MoCoV3~\cite{Chen2021MoCoV3} and BYOL~\cite{Grill2020BYOL} are used
-to evaluate transfer across self-supervised objectives. SimCLR and MoCoV3 are evaluated on all
-three datasets, while the required BYOL evaluation focuses on
-ImageNet-100. All formal training runs use random seed 42.
+to evaluate transfer across self-supervised objectives. SimCLR, MoCoV3,
+and BYOL are evaluated on CIFAR-10, CIFAR-100, and ImageNet-100. All
+formal training runs use random seed 42.
 
 \subsubsection{Three-Stage Evaluation Protocol}
 Each attack--learner--dataset configuration follows the three stages
@@ -741,6 +741,11 @@ the attacker-selected target class. We report both $(\mathrm{ACC}_p,
 $(\mathrm{ACC}_d,\mathrm{ASR}_d)$ for the encoder trained on the cleansed
 corpus. Detection quality alone is not treated as evidence of a successful
 defense; a valid result must reduce ASR while preserving clean accuracy.
+The completed Stage-2/Stage-3 pairs are summarized in
+Table~\ref{tab:mitigation_results} using the final-checkpoint metrics
+recorded in the experiment summary. A configuration whose CleanPost
+training is still running is explicitly marked rather than estimated or
+imputed.
 
 For each learner--dataset pair, a clean-only encoder provides an attack
 validity control. We apply the same three trigger transformations to this
@@ -815,8 +820,127 @@ described in Section~\ref{sec:evaluation_metrics}.
     \end{tabular}}
 \end{table*}
 
-% Mitigation, ablation, and efficiency results will be inserted only after
-% the corresponding artifacts pass configuration and hash audits.
+\subsection{End-to-End Backdoor Mitigation Results}
+\label{sec:mitigation_results}
+
+Table~\ref{tab:mitigation_results} reports the final-checkpoint clean
+accuracy and attack success rate of the Stage-2 poisoned encoder and the
+Stage-3 CleanPost encoder. At the raw-metric level, the recorded Stage-3
+ASR is lower than the corresponding Stage-2 ASR in 25 of the 26 completed
+pairs. Clean accuracy changes by no more than one percentage point in 19
+of these 26 pairs.
+
+The only completed pair in which the recorded ASR increases is
+BYOL--CIFAR-10 under SSL-Backdoor, from 0.91\% to 4.84\%. The most
+noticeable clean-accuracy decreases occur for BYOL--CIFAR-100 under CTRL,
+from 63.74\% to 61.73\%, and for BYOL--CIFAR-10 under CorruptEncoder,
+from 89.31\% to 87.79\%. Because the clean-only attack-validity controls
+are not yet populated in the current result table, these values are
+reported as raw mitigation outcomes rather than definitive evidence of
+defense success. The Stage-3 BYOL--ImageNet-100 result under CTRL is
+currently being trained and is therefore marked accordingly.
+
+\begin{table*}[!t]
+    \centering
+    \caption{End-to-end backdoor mitigation across self-supervised learners,
+    datasets, and attacks. All values are percentages.}
+    \label{tab:mitigation_results}
+    \scriptsize
+    \setlength{\tabcolsep}{2.0pt}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{llcc*{12}{c}}
+        \toprule
+        \multirow{2}{*}{Learner} & \multirow{2}{*}{Dataset}
+        & \multicolumn{2}{c}{No attack}
+        & \multicolumn{4}{c}{SSL-Backdoor}
+        & \multicolumn{4}{c}{CTRL}
+        & \multicolumn{4}{c}{CorruptEncoder} \\
+        \cmidrule(lr){3-4}
+        \cmidrule(lr){5-8}
+        \cmidrule(lr){9-12}
+        \cmidrule(lr){13-16}
+        & & ACC $\uparrow$ & Target rate $\downarrow$
+          & $\mathrm{ACC}_{p}\uparrow$ & $\mathrm{ASR}_{p}\downarrow$
+          & $\mathrm{ACC}_{d}\uparrow$ & $\mathrm{ASR}_{d}\downarrow$
+          & $\mathrm{ACC}_{p}\uparrow$ & $\mathrm{ASR}_{p}\downarrow$
+          & $\mathrm{ACC}_{d}\uparrow$ & $\mathrm{ASR}_{d}\downarrow$
+          & $\mathrm{ACC}_{p}\uparrow$ & $\mathrm{ASR}_{p}\downarrow$
+          & $\mathrm{ACC}_{d}\uparrow$ & $\mathrm{ASR}_{d}\downarrow$ \\
+        \midrule
+
+        \multirow{3}{*}{SimCLR--ResNet-18}
+          & CIFAR-10
+          & &
+          & 91.02 & 13.72 & 91.62 & 6.48
+          & 89.82 & 30.23 & 90.11 & 10.79
+          & 90.68 & 22.67 & 90.34 & 11.70 \\
+        & CIFAR-100
+          & &
+          & 62.81 & 67.60 & 62.90 & 0.00
+          & 63.45 & 68.76 & 63.14 & 0.00
+          & 62.40 & 3.27 & 63.35 & 2.72 \\
+        & ImageNet-100
+          & &
+          & 66.27 & 54.65 & 65.78 & 0.00
+          & 65.71 & 2.04 & 65.99 & 0.00
+          & 74.49 & 2.11 & 74.64 & 0.87 \\
+
+        \midrule
+
+        \multirow{3}{*}{MoCoV3--ResNet-18}
+          & CIFAR-10
+          & &
+          & 91.47 & 49.40 & 91.92 & 11.53
+          & 88.02 & 21.31 & 90.39 & 10.14
+          & 91.50 & 11.70 & 91.80 & 2.15 \\
+        & CIFAR-100
+          & &
+          & 66.41 & 0.11 & 66.65 & 0.00
+          & 66.24 & 53.11 & 66.31 & 0.00
+          & 66.28 & 0.34 & 67.60 & 0.15 \\
+        & ImageNet-100
+          & &
+          & 69.13 & 37.54 & 70.88 & 0.00
+          & 70.32 & 2.04 & 70.04 & 0.00
+          & 74.05 & 4.15 & 74.78 & 0.51 \\
+
+        \midrule
+
+        \multirow{3}{*}{BYOL--ResNet-18}
+          & CIFAR-10
+          & &
+          & 91.31 & 0.91 & 91.09 & 4.84
+          & 91.30 & 13.90 & 91.06 & 5.22
+          & 89.31 & 49.63 & 87.79 & 25.76 \\
+        & CIFAR-100
+          & &
+          & 63.17 & 64.28 & 62.12 & 0.00
+          & 63.74 & 76.07 & 61.73 & 0.00
+          & 62.75 & 21.63 & 62.84 & 9.95 \\
+        & ImageNet-100
+          & &
+          & 72.00 & 53.10 & 71.72 & 0.00
+          & 72.35 & 27.89
+          & \multicolumn{2}{c}{\textit{training}}
+          & 73.25 & 7.51 & 75.66 & 5.76 \\
+
+        \bottomrule
+    \end{tabular}}
+    \vspace{1mm}
+
+    \parbox{\textwidth}{\scriptsize
+    $\mathrm{ACC}_{p}$ and $\mathrm{ASR}_{p}$ denote the final clean
+    accuracy and attack success rate of the Stage-2 poisoned encoder,
+    respectively; $\mathrm{ACC}_{d}$ and $\mathrm{ASR}_{d}$ denote the
+    corresponding metrics of the Stage-3 CleanPost encoder. The No-attack
+    columns are intentionally left blank in the current version because the
+    corresponding clean-only results are not included in the current result
+    summary. \textit{training} denotes a Stage-3 result whose training has
+    not yet completed.}
+\end{table*}
+
+% Ablation and efficiency results will be inserted only after the
+% corresponding artifacts pass configuration and hash audits.
 \section{Discussion and Limitations}\label{sec:discussion}
 % TODO
 \section{Conclusion}\label{sec:conclusion}
